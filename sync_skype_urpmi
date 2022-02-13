@@ -1,0 +1,575 @@
+#!/bin/sh
+
+# Name        sync_skype_urpmi
+
+# Purpose     Synchronize local Mageia Linux URPMI repo from upstream skypeforlinux RPM thus enabling install/update using urpmi.
+#
+#             Check for new version of "skypeforlinux-64.rpm", if new then download, re-generate local URPMI copy and install.
+#             Using local URPMI source enables automatic dependency installs.
+
+# Reference   https://wiki.mageia.org/en/Synchronize_local_skype_urpmi
+#             https://github.com/wikigazer/sync_skype_urpmi.git
+
+              version=2
+
+# Author      paul[dot]blackburn[at]gmail[dot]com
+# Written     2022_02_05
+# Updated     Sun 13 Feb 17:09:55 GMT 2022
+
+
+# 2022_02_10  Configuring package signing key
+# 2022_02_10  rationalized code into functions
+# 2022_02_07  Added urpmi configuration
+# 2022_02_05  1st draft based on idea from check_skype script.
+
+# Usage       sync_skype_urpmi
+#
+#             Run as non-root user. If root needed the script will prompt for root authentication.
+#             Run from time to time to check if there is a new upstream copy of the RPM
+#             and if so the synchronize local URPMI copy.
+
+# Assumptions
+#             o The latest available rpm is in:
+#                     https://repo.skype.com/latest/skypeforlinux-64.rpm
+#
+#             o We are installing on 64-bit Mageia Linux version 8
+#             o There is no 32-bit rpm available for skype.
+#             o For different langauge variations we determine the name of the Downloads directory with:
+#                   LSSUD=$(xdg-user-dir DOWNLOAD)
+#
+#             o There is at least 150mb of free disk space in ${LSSUD}
+#
+#             o ${LSSUD}/skypeforlinux-64.rpm will be the local copy (if previously downloaded).
+#             o ${LSSUD}/skypeforlinux-64.rpm_directory_listing will be the local copy
+#               of the server's RPM listing (if previously downloaded).
+#
+#             o Current user is authorised to run /bin/sudo for the install part.
+
+# Notes        
+#             Keeping a local copy of the server's directory listing makes it very fast and easy
+#             to check for a new version (instead of downloading and comparing the rpm with
+#             previously downloaded rpm).
+#
+#             Curious that skypeforlinux needs "libatomic or libatomic1" pre-requisite installed
+#             but even with libatomic1 installed it fails urpmi and we fall back to "rpm -ivh".
+
+# To Do
+#             for wiki page: manually adding signing key
+#             Daily crontab'ed script to poll checking for new update and if found then notify.
+
+# Done
+#             github upload
+#             Create README.txt in ${LSSUD}
+#             Add skypeforlinux key to sign rpm
+#             Verify skypeforlinux key to sign rpm
+#             key from postinstall script in skypeforlinux rpm:
+#             https://repo.skype.com/data/SKYPE-GPG-KEY
+
+
+# functions -------------------------------------------------------------
+
+usage() {
+
+        cat <<eeooff
+${cmd} synchronizes local URPMI repository generated from upstream skypeforlinux RPM enabling install/update using urpmi.
+Run as non-root user. If an update is needed, sudo will prompt for password.
+Downloaded skypeforlinux rpm stored in:  ${LSSUD}
+eeooff
+
+}
+
+fatal() {
+        echo "${cmd} fatal: ${1}" >&2
+        exit 1
+}
+
+error() {
+        echo "${cmd} error: ${1}" >&2
+}
+
+warning() {
+        echo "${cmd} warning: ${1}" >&2
+}
+
+tstamp() {
+        echo $(date +%Y_%m_%d_at_%H:%M:%S) ${cmd}: ${1}
+}
+
+doit() {
+        tstamp "${1}"
+        eval ${1}
+
+        retcode=$?
+        if [ ${retcode} != 0 ]; then
+                error "\$?=${retcode}"
+        fi
+}  # End of: doit ()
+
+
+elapsed_time () {
+        start=${1}
+        end=${2}
+
+#       echo debug: elapsed_time ${start} ${end}
+        unset x
+        unset y
+
+        if [ ${start} = ${end} ]; then
+                echo -n "zero seconds"
+        fi
+
+        let elapsed_seconds=${end}-${start}
+        let days=${elapsed_seconds}/86400
+        let days_sec=${days}*86400
+
+        let x=${elapsed_seconds}-${days_sec}
+        let hours=${x}/3600
+        let hours_sec=${hours}*3600
+       
+        let x=${days_sec}+${hours_sec}
+        let y=${elapsed_seconds}-${x}
+        let mins=${y}/60
+        let mins_sec=${mins}*60
+
+        let x=${days_sec}+${hours_sec}+${mins_sec}
+        let secs=${elapsed_seconds}-${x}
+
+        if [ ${days} != 0 ]; then
+                if [ ${days} = 1 ]; then
+                        echo -n "1 day "
+                else
+                        echo -n "${days} days "
+                fi
+        fi
+
+        if [ ${hours} != 0 ]; then
+                if [ ${hours} = 1 ]; then
+                        echo -n "1 hour "
+                else
+                        echo -n "${hours} hours "
+                fi
+        fi
+
+        if [ ${mins} != 0 ]; then
+                if [ ${mins} = 1 ]; then
+                        echo -n "1 minute "
+                else
+                        echo -n "${mins} minutes "
+                fi
+        fi
+
+        if [ ${secs} != 0 ]; then
+                if [ ${secs} = 1 ]; then
+                        echo -n "1 second "
+                else
+                        echo -n "${secs} seconds"
+                fi
+        fi
+
+        echo
+
+} # end of: elapsed_time ()
+
+
+check_lssum () {
+
+# Check for local sync skype urpmi media (lssum) in urpmi configuration.
+# If not present then: urpmi.addmedia --update ${LSSUM} ${LSSUD}.
+
+	tstamp "Checking for urpmi media: ${LSSUM}"
+	urpmq --list-media | grep ${LSSUM}
+	if [ $? = 0 ]; then
+		tstamp "urpmi media exists: ${LSSUM}"
+	else
+		tstamp "urpmi media does not exist: ${LSSUM}"
+		tstamp "adding urpmi media: ${LSSUD}"
+		doit "/bin/sudo urpmi.addmedia --update ${LSSUM} ${LSSUD}"
+		if [ $? = 0 ]; then
+			tstamp "Success: added urpmi media: ${LSSUD}"
+		else
+			warning "non-zero return code when attempting to add urpmi media ${LSSUD}"
+		fi
+	fi
+} # end of: check_lssum () 
+
+
+generate_urpmi_readme() {
+	# Create local README.txt for the ${LSSUD}
+
+	cat << EEOOFF > ${LSSUD}/README.txt
+README.txt for ${LSSUD} created on $(date +%Y_%m_%d_at_%H:%M:%S)
+
+This is the local URPMI repository (${LSSUM}) for package ${SKYPE_PACKAGE}.
+It was created when the ${cmd} script was run.
+
+files:
+${SKYPE_RPM} - downloaded skypeforlinux rpm
+$(basename  ${SKYPE_RPM_DIR_LISTING}) - directory listing on upstream
+
+${SKYPE_GPG_KEY} -  package signing key file for ${SKYPE_PACKAGE}
+${SKYPE_GPG_KEY}.md5 -  MD5 checksum file for ${SKYPE_GPG_KEY}
+
+
+directory:
+media_info - URPMI files for media ${LSSUM}
+
+EEOOFF
+	tstamp "Created ${LSSUD}/README.txt"
+
+} # end of: generate_urpmi_readme()
+
+
+generate_urpmi () {
+# generate urpmi files for ${LSSUD} and and new urpmi media for ${LSSUM}
+
+	tstamp "Generating urpmi files for ${LSSUD}"
+	doit "(cd ${LSSUD}; pwd; genhdlist2 .; ls -l)"
+
+# ensure urpmi configuration updated to include ${LSSUD}
+	check_lssum
+
+} # end of: generate_urpmi ()
+
+
+download_install() {
+
+# download skypeforlinux
+# create local urpmi repo
+# configure package signing key
+# install pre-reqs and skypeforlinux
+
+# download skypeforlinux-64.rpm
+
+        tstamp "downloading ${SKYPE_RPM}"
+        wget -O - https://repo.skype.com/latest/${SKYPE_RPM} > ${f}
+        tstamp "downloaded: $(ls -lh ${f})"
+
+	generate_urpmi
+	generate_urpmi_readme
+
+	get_skype_key
+
+# Check libatomic1 pre-req
+	tstamp "Checking that pre-requisite rpm libatomic1 is already installed"
+	echo "rpm -q libatomic1"
+	rpm -q libatomic1
+	if [ $? = 0 ]; then
+		tstamp "Good news: libatomic1 is already installed"
+		doit "rpm -q libatomic1"
+		doit "rpm -ql libatomic1    # files in libatomic rpm"
+	else
+		tstamp "Installing pre-requisite rpm libatomic1"
+		tstamp "+-----------------------+"
+		tstamp "| Installing libatomic1 |"
+		tstamp "+-----------------------+"
+		doit "/bin/sudo /sbin/urpmi ${urpmi_options} libatomic1"
+		doit "rpm -q libatomic1    # Display currently installed libatomic1 version"
+	fi
+
+	install_skypeforlinux
+
+} # end of:  download_install ()
+
+
+install_skypeforlinux () {
+
+
+	tstamp "+--------------------------+"
+	tstamp "| Installing skypeforlinux |"
+	tstamp "+--------------------------+"
+	doit "/bin/sudo /sbin/urpmi  ${urpmi_options} ${SKYPE_PACKAGE}"
+	rpm -q ${SKYPE_PACKAGE}
+	if [ $? = 0 ]; then
+                tstamp "Good news: ${SKYPE_PACKAGE} installed"
+	else
+		warning "failed to install ${SKYPE_PACKAGE}"
+		tstamp "Trying alternative install for ${SKYPE_PACKAGE}"
+		echo "/bin/sudo rpm -ivh --nodeps ${f}    # install using rpm"
+		/bin/sudo rpm -ivh --nodeps ${f}    # install using rpm
+		if [ $? = 0 ]; then
+			tstamp " ${SKYPE_PACKAGE} installed OK with rpm"
+		else
+			warning "${SKYPE_PACKAGE} install with rpm returned error code"
+		fi
+	fi
+
+	doit "rpm -q ${SKYPE_PACKAGE}    # Display currently installed ${SKYPE_PACKAGE} version"
+
+
+        tstamp "get directory listing for date/time/size of available rpm"
+        wget -qO - https://repo.skype.com/latest/ | grep skypeforlinux-64.rpm > ${SKYPE_RPM_DIR_LISTING}
+        tstamp "downloaded directory listing for ${SKYPE_RPM}:"
+	echo "$(ls -l  ${SKYPE_RPM_DIR_LISTING} )"
+
+} # end of: install_skypeforlinux () {
+
+
+get_skype_key () {
+# Download skypeforlinux package key, install and import key.
+
+	tstamp "Checking Skype GPG key"
+	if [ -s ${LSSUD}/${SKYPE_GPG_KEY} ]; then
+		tstamp "Local Skype GPG key found: ${LSSUD}/${SKYPE_GPG_KEY}"
+		tstamp "Checking Skype GPG key's md5"
+		if [ -s ${LSSUD}/${SKYPE_GPG_KEY}.md5 ]; then
+			tstamp "Local Skype GPG key's md5 found"
+			tstamp "Verfying local Skype GPG key against md5"
+		 	echo "md5sum -c ${LSSUD}/${SKYPE_GPG_KEY}.md5"
+			md5sum -c ${LSSUD}/${SKYPE_GPG_KEY}.md5
+			if [ $? = 0 ]; then
+				tstamp "Good news: verified local Skype GPG key against md5"
+			else
+				fatal "failed to verify local Skype GPG key against md5"
+			fi
+
+		 else
+			 tstamp "Creating local Skype GPG key's md5"
+			 doit "md5sum ${LSSUD}/${SKYPE_GPG_KEY} > ${LSSUD}/${SKYPE_GPG_KEY}.md5"
+		 fi
+	else
+		warning "Local Skype GPG key not found"
+		tstamp "Downloading Skype GPG key"
+		doit "wget -qO - https://repo.skype.com/data/SKYPE-GPG-KEY > ${LSSUD}/${SKYPE_GPG_KEY}"
+		tstamp "Creating local Skype GPG key's md5"
+		doit "md5sum ${LSSUD}/${SKYPE_GPG_KEY} > ${LSSUD}/${SKYPE_GPG_KEY}.md5"
+	fi
+
+	tstamp "Checking Skype GPG key in /etc/pki/rpm-gpg/"
+	if [ -s /etc/pki/rpm-gpg/${SKYPE_GPG_KEY} ]; then
+		tstamp "Skype GPG key found in /etc/pki/rpm-gpg/"
+		tstamp "Verifying: /etc/pki/rpm-gpg/${SKYPE_GPG_KEY}"
+		cmp ${LSSUD}/${SKYPE_GPG_KEY} /etc/pki/rpm-gpg/${SKYPE_GPG_KEY}    2>&1 > /dev/null
+		if [ $? = 0 ]; then
+			tstamp "Good news: verified /etc/pki/rpm-gpg/${SKYPE_GPG_KEY} with ${LSSUD}/${SKYPE_GPG_KEY}"
+		else
+			warning "failed to verify /etc/pki/rpm-gpg/${SKYPE_GPG_KEY} with ${LSSUD}/${SKYPE_GPG_KEY}"
+			tstamp "Replacing /etc/pki/rpm-gpg/${SKYPE_GPG_KEY}"
+			doit "/bin/sudo cp ${LSSUD}/${SKYPE_GPG_KEY} /etc/pki/rpm-gpg/"
+			doit "/bin/sudo /bin/sudo rpm -import ${LSSUD}/${SKYPE_GPG_KEY}    # Importing key"
+			doit "rpm -qi gpg-pubkey-df7587c3-*    # verify Skype package signing key"
+		fi
+	else
+		tstamp "Installing Skype GPG key in /etc/pki/rpm-gpg/"
+		doit "/bin/sudo cp ${LSSUD}/${SKYPE_GPG_KEY} /etc/pki/rpm-gpg/"
+		doit "/bin/sudo /bin/sudo rpm -import ${LSSUD}/${SKYPE_GPG_KEY}    # Importing key"
+		doit "rpm -qi gpg-pubkey-df7587c3-*    # verify Skype package signing key"
+	fi
+
+}  #end of: get_skype_key ()
+
+# end functions section
+
+
+# set initial values ----------------------------------------------------------------------
+
+# Local sync skype URPMI directory (LSSUD)
+# Location for local directory with URPMI files for skypeforlinux
+#
+# NB: we use xdg-user-dir command because the "Downloads" directory name will be different in different languages.
+# For example: English "Downloads", French "Téléchargements"
+
+LSSUD=$(xdg-user-dir DOWNLOAD)/local_skype_urpmi
+
+# Local sync skype URPMI media (LSSUM)
+LSSUM="local_skype_urpmi"
+
+SKYPE_RPM=skypeforlinux-64.rpm
+
+SKYPE_PACKAGE="skypeforlinux"
+
+SKYPE_GPG_KEY="RPM-GPG-KEY-Skype"
+
+f=${LSSUD}/${SKYPE_RPM}
+SKYPE_RPM_DIR_LISTING=${f}_directory_listing
+
+cmd=$(basename ${0})
+
+case "${1}" in
+        -? | -help | -usage | --?| --help | --usage )
+                usage
+                exit
+                ;;
+esac
+
+tstamp "commenced $(dirname ${0})/${cmd} version ${version}"
+
+start_epoch=$(date +%s)
+
+
+
+# Sanity checking starts here
+
+# Are we running on Mageia?
+distro=$(cat /etc/release | awk '{ print $1}')
+if [ "${distro}" != "Mageia" ]; then
+        echo "Error: not running on Mageia. Bye" >&2
+        exit 1
+fi
+
+# Are we running on 64-bit Mageia?
+arch=$(uname -m | sed -e "s/i.86/i586/")
+if [ "${arch}" != "x86_64" ]; then
+        echo "Error: Skype is only available to 64-bit linux at present. Bye" >&2
+        exit 1
+fi
+
+# Are we running on Mageia 5,6,7, or 8?
+release=$(cat /etc/release | awk '{ print $3}')
+case ${release} in 
+        8) tstamp "Mageia 8 OK"
+                urpmi_options="--force "
+                ;;
+        7) tstamp "Mageia 7 OK"
+                urpmi_options="--force "
+                ;;
+        6) tstamp "Mageia 6 OK"
+                urpmi_options="--force "
+                ;;
+        5) tstamp "Mageia 5: ignore the libsecret issue on install and keyring prompts when running"
+                urpmi_options="--allow-nodeps"
+                ;;
+        *) tstamp "Not supported. Bye" >&2
+                exit 1
+                ;;
+esac
+
+# We need to run as non-root
+if [ $(whoami) = "root" ]; then
+        echo "You need to be non-root user to run ${cmd}. Bye" >&2
+        exit 1
+fi
+
+
+# Sanity checking ends here for the most part :-)  ----------------------------------------
+
+local_download_dir=${LSSUD}
+
+if [ -d ${local_download_dir} ]; then
+        tstamp "Local download directory exists: ${local_download_dir}"
+else
+        tstamp "Creating local download directory: ${local_download_dir}"
+        doit "mkdir -p ${local_download_dir}"
+fi
+
+
+# Check if we already have a local copy of the skypeforlinux-64.rpm in Downloads
+if [ -s ${f} ]; then
+
+        # We do have a previously downloaded copy of skypeforlinux-64.rpm
+
+        # Display currently installed rpm version
+        tstamp "Checking installed version of skypeforlinux"
+        tstamp "rpm -qa | grep -iE skypeforlinux"
+        current_version=$(rpm -qa | grep -iE skypeforlinux)
+        tstamp "Current version is: ${current_version}"
+
+        tstamp "${f} was previously downloaded. Checking if newer version available."
+        # check if we have a previous directory listing from server
+        if [ -s ${SKYPE_RPM_DIR_LISTING} ]; then
+
+                # we have previous dirlinux_signing_key.pubectory listing, check if same as current one
+                mv -f ${SKYPE_RPM_DIR_LISTING} ${SKYPE_RPM_DIR_LISTING}-
+
+                # get directory listing for date/time/size of available rpm
+                wget -qO - https://repo.skype.com/latest/ | grep skypeforlinux-64.rpm > ${SKYPE_RPM_DIR_LISTING}
+
+                # check if same directory listing as last download's directory listing
+                cmp ${SKYPE_RPM_DIR_LISTING} ${SKYPE_RPM_DIR_LISTING}- 2>&1 > /dev/null
+                if [ $? = 0 ]; then
+                        tstamp "skypeforlinux-64.rpm directory listing has *not* changed."
+			tstamp "+---------------------------------------------+"
+			tstamp "| current version: $(rpm -q ${SKYPE_PACKAGE}) |"
+			tstamp "+---------------------------------------------+"
+                        tstamp "+--------------------------+"
+                        tstamp "| Nothing needs to be done |"
+                        tstamp "+--------------------------+"
+                else
+                        tstamp "skypeforlinux-64.rpm directory listing has changed. Installing new skype version."
+                        # rename the current downloaded skypeforlinux-64.rpm to skypeforlinux-64.rpm-
+			doit "mv -f ${f} ${f}-"
+
+                        tstamp "+----------------------------------+"
+                        tstamp "| Installing updated skypeforlinux |"
+                        tstamp "+----------------------------------+"
+
+			download_install
+
+                        new_version=$(rpm -qa | grep -iE skypeforlinux)
+			tstamp "+-----------------------------------------+"
+                        tstamp "| Old version: ${current_version} |"
+                        tstamp "| New version: ${new_version} |"
+			tstamp "+-----------------------------------------+"
+
+                fi
+        else
+                tstamp "We do have a download of skypeforlinux-64.rpm but we do not have a previous directory listing."
+                tstamp "Download available skypeforlinux-64.rpm and compare with what we already downloaded"
+
+		doit "mv -f ${f} ${f}-   # move aside any already downloaded copy of skypeforlinux-64.rpm"
+
+                # download available skypeforlinux-64.rpm (we skip the "-q" on wget because this will take a few minutes
+                # and the user needs to see the download is happening)
+
+                tstamp "Downloading ${SKYPE_RPM}"
+                wget -O - https://repo.skype.com/latest/${SKYPE_RPM} > ${f}
+                tstamp "Downloaded: $(ls -lh ${f})"
+
+                current_version=$(rpm -q skypeforlinux)
+                tstamp "Current version: ${current_version}"
+
+                # compare any previous download with current: are the same?
+                tstamp "Comparing previous download of ${SKYPE_RPM} with what is now available"
+                cmp ${f}- ${f} 2>&1 > /dev/null
+                if [ $? = 0 ]; then
+                        tstamp "skypeforlinux RPM has not changed"
+                        tstamp "+--------------------------+"
+                        tstamp "| Nothing needs to be done |"
+                        tstamp "+--------------------------+"
+                else
+                        tstamp "+--------------------------------+"
+                        tstamp "|Installing updated skypeforlinux|"
+                        tstamp "+--------------------------------+"
+
+			doit "/bin/sudo urpme ${SKYPE_PACKAGE}   # remove old version"
+
+			generate_urpmi
+			install_skypeforlinux
+
+                        new_version=$(rpm -q skypeforlinux)
+			tstamp "+-----------------------------------------+"
+                        tstamp "| Old version: ${current_version} |"
+                        tstamp "| New version: ${new_version} |"
+			tstamp "+-----------------------------------------+"
+                fi
+
+##              # Display currently installed rpm version
+##              echo "Installed skypeforlinux version:"
+##              echo "rpm -qa | grep -iE skypeforlinux"
+##              rpm -qa | grep -iE skypeforlinux
+
+                # get directory listing for date/time/size of available rpm
+                wget -qO - https://repo.skype.com/latest/ | grep skypeforlinux-64.rpm > ${SKYPE_RPM_DIR_LISTING}
+                echo "downloaded directory listing for ${SKYPE_RPM}:  $(ls -l  ${SKYPE_RPM_DIR_LISTING} )"
+        fi
+else
+
+	tstamp "We do not have a previously downloaded copy of skypeforlinux-64.rpm."
+	tstamp "+----------------------------+"
+	tstamp "| Likely a brand new install |"
+	tstamp "+----------------------------+"
+
+	download_install
+
+	tstamp "+---------------------------------------------+"
+	tstamp "| current version: $(rpm -q ${SKYPE_PACKAGE}) |"
+	tstamp "+---------------------------------------------+"
+
+fi
+
+# tidying up and ending -----------------------------------------------------------------
+
+end_epoch=$(date +%s)
+
+echo
+tstamp "total duration $(elapsed_time ${start_epoch} ${end_epoch})"
+tstamp "completed"
