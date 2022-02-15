@@ -14,7 +14,7 @@
 
 # Author      paul[dot]blackburn[at]gmail[dot]com
 # Written     2022_02_05
-# Updated     Sun 13 Feb 23:42:13 GMT 2022
+# Updated     Tue 15 Feb 13:37:48 GMT 2022
 
 # 2022_02_10  Configuring package signing key
 # 2022_02_10  rationalized code into functions
@@ -104,6 +104,7 @@ doit() {
         fi
 }  # End of: doit ()
 
+
 elapsed_time () {
         start=${1}
         end=${2}
@@ -174,27 +175,27 @@ check_lssum () {
 # Check for local sync skype urpmi media (lssum) in urpmi configuration.
 # If not present then: urpmi.addmedia --update ${LSSUM} ${LSSUD}.
 
-        tstamp "Checking for urpmi media: ${LSSUM}"
-        urpmq --list-media | grep ${LSSUM}
-        if [ $? = 0 ]; then
-                tstamp "urpmi media exists: ${LSSUM}"
-        else
-                tstamp "urpmi media does not exist: ${LSSUM}"
-                tstamp "adding urpmi media: ${LSSUD}"
-                doit "/bin/sudo urpmi.addmedia --update ${LSSUM} ${LSSUD}"
-                if [ $? = 0 ]; then
-                        tstamp "Success: added urpmi media: ${LSSUD}"
-                else
-                        warning "non-zero return code when attempting to add urpmi media ${LSSUD}"
-                fi
-        fi
+	tstamp "Checking for urpmi media: ${LSSUM}"
+	urpmq --list-media | grep ${LSSUM}
+	if [ $? = 0 ]; then
+		tstamp "urpmi media exists: ${LSSUM}"
+	else
+		tstamp "urpmi media does not exist: ${LSSUM}"
+		tstamp "adding urpmi media: ${LSSUD}"
+		doit "/bin/sudo urpmi.addmedia --update ${LSSUM} ${LSSUD}"
+		if [ $? = 0 ]; then
+			tstamp "Success: added urpmi media: ${LSSUD}"
+		else
+			warning "non-zero return code when attempting to add urpmi media ${LSSUD}"
+		fi
+	fi
 } # end of: check_lssum () 
 
 
 generate_urpmi_readme() {
-        # Create local README.txt for the ${LSSUD}
+	# Create local README.txt for the ${LSSUD}
 
-        cat << EEOOFF > ${LSSUD}/README.txt
+	cat << EEOOFF > ${LSSUD}/README.txt
 README.txt for ${LSSUD} created on $(date +%Y_%m_%d_at_%H:%M:%S)
 
 This is the local URPMI repository (${LSSUM}) for package ${SKYPE_PACKAGE}.
@@ -212,7 +213,7 @@ directory:
 media_info - URPMI files for media ${LSSUM}
 
 EEOOFF
-        tstamp "Created ${LSSUD}/README.txt"
+	tstamp "Created ${LSSUD}/README.txt"
 
 } # end of: generate_urpmi_readme()
 
@@ -220,11 +221,11 @@ EEOOFF
 generate_urpmi () {
 # generate urpmi files for ${LSSUD} and and new urpmi media for ${LSSUM}
 
-        tstamp "Generating urpmi files for ${LSSUD}"
-        doit "(cd ${LSSUD}; pwd; genhdlist2 .; ls -l)"
+	tstamp "Generating urpmi files for ${LSSUD}"
+	doit "(cd ${LSSUD}; pwd; genhdlist2 .; ls -l)"
 
 # ensure urpmi configuration updated to include ${LSSUD}
-        check_lssum
+	check_lssum
 
 } # end of: generate_urpmi ()
 
@@ -242,29 +243,29 @@ download_install() {
         wget -O - https://repo.skype.com/latest/${SKYPE_RPM} > ${f}
         tstamp "downloaded: $(ls -lh ${f})"
 
-        generate_urpmi
-        generate_urpmi_readme
+	generate_urpmi
+	generate_urpmi_readme
 
-        get_skype_key
+	get_skype_key
 
 # Check libatomic1 pre-req
-        tstamp "Checking that pre-requisite rpm libatomic1 is already installed"
-        echo "rpm -q libatomic1"
-        rpm -q libatomic1
-        if [ $? = 0 ]; then
-                tstamp "Good news: libatomic1 is already installed"
-                doit "rpm -q libatomic1"
-                doit "rpm -ql libatomic1    # files in libatomic rpm"
-        else
-                tstamp "Installing pre-requisite rpm libatomic1"
-                tstamp "+-----------------------+"
-                tstamp "| Installing libatomic1 |"
-                tstamp "+-----------------------+"
-                doit "/bin/sudo /sbin/urpmi ${urpmi_options} libatomic1"
-                doit "rpm -q libatomic1    # Display currently installed libatomic1 version"
-        fi
+	tstamp "Checking that pre-requisite rpm libatomic1 is already installed"
+	echo "rpm -q libatomic1"
+	rpm -q libatomic1
+	if [ $? = 0 ]; then
+		tstamp "Good news: libatomic1 is already installed"
+		doit "rpm -q libatomic1"
+		doit "rpm -ql libatomic1    # files in libatomic rpm"
+	else
+		tstamp "Installing pre-requisite rpm libatomic1"
+		tstamp "+-----------------------+"
+		tstamp "| Installing libatomic1 |"
+		tstamp "+-----------------------+"
+		doit "/bin/sudo /sbin/urpmi ${urpmi_options} libatomic1"
+		doit "rpm -q libatomic1    # Display currently installed libatomic1 version"
+	fi
 
-        install_skypeforlinux
+	install_skypeforlinux
 
 } # end of:  download_install ()
 
@@ -272,89 +273,91 @@ download_install() {
 install_skypeforlinux () {
 
 
-        tstamp "+--------------------------+"
-        tstamp "| Installing skypeforlinux |"
-        tstamp "+--------------------------+"
-        doit "/bin/sudo /sbin/urpmi  ${urpmi_options} ${SKYPE_PACKAGE}"
-        rpm -q ${SKYPE_PACKAGE}
-        if [ $? = 0 ]; then
+	tstamp "+--------------------------+"
+	tstamp "| Installing skypeforlinux |"
+	tstamp "+--------------------------+"
+	doit "/bin/sudo /sbin/urpmi  ${urpmi_options} ${SKYPE_PACKAGE}"
+	rpm -q ${SKYPE_PACKAGE}
+	if [ $? = 0 ]; then
                 tstamp "Good news: ${SKYPE_PACKAGE} installed"
-        else
-                warning "failed to install ${SKYPE_PACKAGE}"
-                tstamp "Trying alternative install for ${SKYPE_PACKAGE}"
-                echo "/bin/sudo rpm -ivh --nodeps ${f}    # install using rpm"
-                /bin/sudo rpm -ivh --nodeps ${f}    # install using rpm
-                if [ $? = 0 ]; then
-                        tstamp " ${SKYPE_PACKAGE} installed OK with rpm"
-                else
-                        warning "${SKYPE_PACKAGE} install with rpm returned error code"
-                fi
-        fi
+	else
+		warning "failed to install ${SKYPE_PACKAGE}"
+		tstamp "Trying alternative install for ${SKYPE_PACKAGE}"
+		echo "/bin/sudo rpm -ivh --nodeps ${f}    # install using rpm"
+		/bin/sudo rpm -ivh --nodeps ${f}    # install using rpm
+		if [ $? = 0 ]; then
+			tstamp " ${SKYPE_PACKAGE} installed OK with rpm"
+		else
+			warning "${SKYPE_PACKAGE} install with rpm returned error code"
+		fi
+	fi
 
-        doit "rpm -q ${SKYPE_PACKAGE}    # Display currently installed ${SKYPE_PACKAGE} version"
+	doit "rpm -q ${SKYPE_PACKAGE}    # Display currently installed ${SKYPE_PACKAGE} version"
 
 
         tstamp "get directory listing for date/time/size of available rpm"
         wget -qO - https://repo.skype.com/latest/ | grep skypeforlinux-64.rpm > ${SKYPE_RPM_DIR_LISTING}
         tstamp "downloaded directory listing for ${SKYPE_RPM}:"
-        echo "$(ls -l  ${SKYPE_RPM_DIR_LISTING} )"
+	echo "$(ls -l  ${SKYPE_RPM_DIR_LISTING} )"
 
 } # end of: install_skypeforlinux () {
+
 
 get_skype_key () {
 # Download skypeforlinux package key, install and import key.
 
-        tstamp "Checking Skype GPG key"
-        if [ -s ${LSSUD}/${SKYPE_GPG_KEY} ]; then
-                tstamp "Local Skype GPG key found: ${LSSUD}/${SKYPE_GPG_KEY}"
-                tstamp "Checking Skype GPG key's md5"
-                if [ -s ${LSSUD}/${SKYPE_GPG_KEY}.md5 ]; then
-                        tstamp "Local Skype GPG key's md5 found"
-                        tstamp "Verfying local Skype GPG key against md5"
-                        echo "md5sum -c ${LSSUD}/${SKYPE_GPG_KEY}.md5"
-                        md5sum -c ${LSSUD}/${SKYPE_GPG_KEY}.md5
-                        if [ $? = 0 ]; then
-                                tstamp "Good news: verified local Skype GPG key against md5"
-                        else
-                                fatal "failed to verify local Skype GPG key against md5"
-                        fi
+	tstamp "Checking Skype GPG key"
+	if [ -s ${LSSUD}/${SKYPE_GPG_KEY} ]; then
+		tstamp "Local Skype GPG key found: ${LSSUD}/${SKYPE_GPG_KEY}"
+		tstamp "Checking Skype GPG key's md5"
+		if [ -s ${LSSUD}/${SKYPE_GPG_KEY}.md5 ]; then
+			tstamp "Local Skype GPG key's md5 found"
+			tstamp "Verfying local Skype GPG key against md5"
+		 	echo "md5sum -c ${LSSUD}/${SKYPE_GPG_KEY}.md5"
+			md5sum -c ${LSSUD}/${SKYPE_GPG_KEY}.md5
+			if [ $? = 0 ]; then
+				tstamp "Good news: verified local Skype GPG key against md5"
+			else
+				fatal "failed to verify local Skype GPG key against md5"
+			fi
 
-                 else
-                         tstamp "Creating local Skype GPG key's md5"
-                         doit "md5sum ${LSSUD}/${SKYPE_GPG_KEY} > ${LSSUD}/${SKYPE_GPG_KEY}.md5"
-                 fi
-        else
-                warning "Local Skype GPG key not found"
-                tstamp "Downloading Skype GPG key"
-                doit "wget -qO - https://repo.skype.com/data/SKYPE-GPG-KEY > ${LSSUD}/${SKYPE_GPG_KEY}"
-                tstamp "Creating local Skype GPG key's md5"
-                doit "md5sum ${LSSUD}/${SKYPE_GPG_KEY} > ${LSSUD}/${SKYPE_GPG_KEY}.md5"
-        fi
+		 else
+			 tstamp "Creating local Skype GPG key's md5"
+			 doit "md5sum ${LSSUD}/${SKYPE_GPG_KEY} > ${LSSUD}/${SKYPE_GPG_KEY}.md5"
+		 fi
+	else
+		warning "Local Skype GPG key not found"
+		tstamp "Downloading Skype GPG key"
+		doit "wget -qO - https://repo.skype.com/data/SKYPE-GPG-KEY > ${LSSUD}/${SKYPE_GPG_KEY}"
+		tstamp "Creating local Skype GPG key's md5"
+		doit "md5sum ${LSSUD}/${SKYPE_GPG_KEY} > ${LSSUD}/${SKYPE_GPG_KEY}.md5"
+	fi
 
-        tstamp "Checking Skype GPG key in /etc/pki/rpm-gpg/"
-        if [ -s /etc/pki/rpm-gpg/${SKYPE_GPG_KEY} ]; then
-                tstamp "Skype GPG key found in /etc/pki/rpm-gpg/"
-                tstamp "Verifying: /etc/pki/rpm-gpg/${SKYPE_GPG_KEY}"
-                cmp ${LSSUD}/${SKYPE_GPG_KEY} /etc/pki/rpm-gpg/${SKYPE_GPG_KEY}    2>&1 > /dev/null
-                if [ $? = 0 ]; then
-                        tstamp "Good news: verified /etc/pki/rpm-gpg/${SKYPE_GPG_KEY} with ${LSSUD}/${SKYPE_GPG_KEY}"
-                else
-                        warning "failed to verify /etc/pki/rpm-gpg/${SKYPE_GPG_KEY} with ${LSSUD}/${SKYPE_GPG_KEY}"
-                        tstamp "Replacing /etc/pki/rpm-gpg/${SKYPE_GPG_KEY}"
-                        doit "/bin/sudo cp ${LSSUD}/${SKYPE_GPG_KEY} /etc/pki/rpm-gpg/"
-                        doit "/bin/sudo /bin/sudo rpm -import ${LSSUD}/${SKYPE_GPG_KEY}    # Importing key"
-                        doit "rpm -qi gpg-pubkey-df7587c3-*    # verify Skype package signing key"
-                fi
-        else
-                tstamp "Installing Skype GPG key in /etc/pki/rpm-gpg/"
-                doit "/bin/sudo cp ${LSSUD}/${SKYPE_GPG_KEY} /etc/pki/rpm-gpg/"
-                doit "/bin/sudo /bin/sudo rpm -import ${LSSUD}/${SKYPE_GPG_KEY}    # Importing key"
-                doit "rpm -qi gpg-pubkey-df7587c3-*    # verify Skype package signing key"
-        fi
+	tstamp "Checking Skype GPG key in /etc/pki/rpm-gpg/"
+	if [ -s /etc/pki/rpm-gpg/${SKYPE_GPG_KEY} ]; then
+		tstamp "Skype GPG key found in /etc/pki/rpm-gpg/"
+		tstamp "Verifying: /etc/pki/rpm-gpg/${SKYPE_GPG_KEY}"
+		cmp ${LSSUD}/${SKYPE_GPG_KEY} /etc/pki/rpm-gpg/${SKYPE_GPG_KEY}    2>&1 > /dev/null
+		if [ $? = 0 ]; then
+			tstamp "Good news: verified /etc/pki/rpm-gpg/${SKYPE_GPG_KEY} with ${LSSUD}/${SKYPE_GPG_KEY}"
+		else
+			warning "failed to verify /etc/pki/rpm-gpg/${SKYPE_GPG_KEY} with ${LSSUD}/${SKYPE_GPG_KEY}"
+			tstamp "Replacing /etc/pki/rpm-gpg/${SKYPE_GPG_KEY}"
+			doit "/bin/sudo cp ${LSSUD}/${SKYPE_GPG_KEY} /etc/pki/rpm-gpg/"
+			doit "/bin/sudo rpm -import ${LSSUD}/${SKYPE_GPG_KEY}    # Importing key"
+			doit "rpm -qi gpg-pubkey-df7587c3-*    # verify Skype package signing key"
+		fi
+	else
+		tstamp "Installing Skype GPG key in /etc/pki/rpm-gpg/"
+		doit "/bin/sudo cp ${LSSUD}/${SKYPE_GPG_KEY} /etc/pki/rpm-gpg/"
+		doit "/bin/sudo /bin/sudo rpm -import ${LSSUD}/${SKYPE_GPG_KEY}    # Importing key"
+		doit "rpm -qi gpg-pubkey-df7587c3-*    # verify Skype package signing key"
+	fi
 
 }  #end of: get_skype_key ()
 
 # end functions section
+
 
 # set initial values ----------------------------------------------------------------------
 
@@ -473,35 +476,35 @@ if [ -s ${f} ]; then
                 cmp ${SKYPE_RPM_DIR_LISTING} ${SKYPE_RPM_DIR_LISTING}- 2>&1 > /dev/null
                 if [ $? = 0 ]; then
                         tstamp "skypeforlinux-64.rpm directory listing has *not* changed."
-                        tstamp "+---------------------------------------------+"
-                        tstamp "| current version: $(rpm -q ${SKYPE_PACKAGE}) |"
-                        tstamp "+---------------------------------------------+"
+			tstamp "+---------------------------------------------+"
+			tstamp "| current version: $(rpm -q ${SKYPE_PACKAGE}) |"
+			tstamp "+---------------------------------------------+"
                         tstamp "+--------------------------+"
                         tstamp "| Nothing needs to be done |"
                         tstamp "+--------------------------+"
                 else
                         tstamp "skypeforlinux-64.rpm directory listing has changed. Installing new skype version."
                         # rename the current downloaded skypeforlinux-64.rpm to skypeforlinux-64.rpm-
-                        doit "mv -f ${f} ${f}-"
+			doit "mv -f ${f} ${f}-"
 
                         tstamp "+----------------------------------+"
                         tstamp "| Installing updated skypeforlinux |"
                         tstamp "+----------------------------------+"
 
-                        download_install
+			download_install
 
                         new_version=$(rpm -qa | grep -iE skypeforlinux)
-                        tstamp "+-----------------------------------------+"
+			tstamp "+-----------------------------------------+"
                         tstamp "| Old version: ${current_version} |"
                         tstamp "| New version: ${new_version} |"
-                        tstamp "+-----------------------------------------+"
+			tstamp "+-----------------------------------------+"
 
                 fi
         else
                 tstamp "We do have a download of skypeforlinux-64.rpm but we do not have a previous directory listing."
                 tstamp "Download available skypeforlinux-64.rpm and compare with what we already downloaded"
 
-                doit "mv -f ${f} ${f}-   # move aside any already downloaded copy of skypeforlinux-64.rpm"
+		doit "mv -f ${f} ${f}-   # move aside any already downloaded copy of skypeforlinux-64.rpm"
 
                 # download available skypeforlinux-64.rpm (we skip the "-q" on wget because this will take a few minutes
                 # and the user needs to see the download is happening)
@@ -526,16 +529,16 @@ if [ -s ${f} ]; then
                         tstamp "|Installing updated skypeforlinux|"
                         tstamp "+--------------------------------+"
 
-                        doit "/bin/sudo urpme ${SKYPE_PACKAGE}   # remove old version"
+			doit "/bin/sudo urpme ${SKYPE_PACKAGE}   # remove old version"
 
-                        generate_urpmi
-                        install_skypeforlinux
+			generate_urpmi
+			install_skypeforlinux
 
                         new_version=$(rpm -q skypeforlinux)
-                        tstamp "+-----------------------------------------+"
+			tstamp "+-----------------------------------------+"
                         tstamp "| Old version: ${current_version} |"
                         tstamp "| New version: ${new_version} |"
-                        tstamp "+-----------------------------------------+"
+			tstamp "+-----------------------------------------+"
                 fi
 
 ##              # Display currently installed rpm version
@@ -549,16 +552,16 @@ if [ -s ${f} ]; then
         fi
 else
 
-        tstamp "We do not have a previously downloaded copy of skypeforlinux-64.rpm."
-        tstamp "+----------------------------+"
-        tstamp "| Likely a brand new install |"
-        tstamp "+----------------------------+"
+	tstamp "We do not have a previously downloaded copy of skypeforlinux-64.rpm."
+	tstamp "+----------------------------+"
+	tstamp "| Likely a brand new install |"
+	tstamp "+----------------------------+"
 
-        download_install
+	download_install
 
-        tstamp "+---------------------------------------------+"
-        tstamp "| current version: $(rpm -q ${SKYPE_PACKAGE}) |"
-        tstamp "+---------------------------------------------+"
+	tstamp "+---------------------------------------------+"
+	tstamp "| current version: $(rpm -q ${SKYPE_PACKAGE}) |"
+	tstamp "+---------------------------------------------+"
 
 fi
 
