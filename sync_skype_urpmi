@@ -10,12 +10,13 @@
 # Reference   https://wiki.mageia.org/en/Synchronize_local_skype_urpmi
 #             https://github.com/wikigazer/sync_skype_urpmi.git
 
-              version=2
+              version=3
 
 # Author      paul[dot]blackburn[at]gmail[dot]com
 # Written     2022_02_05
-# Updated     Tue 15 Feb 13:37:48 GMT 2022
+# Updated     Sat  5 Mar 17:55:38 GMT 2022
 
+# 2022_03_04  bugfix update process
 # 2022_02_10  Configuring package signing key
 # 2022_02_10  rationalized code into functions
 # 2022_02_07  Added urpmi configuration
@@ -55,6 +56,7 @@
 # To Do
 #             for wiki page: manually adding signing key
 #             Daily crontab'ed script to poll checking for new update and if found then notify.
+#             Check for newer version of sync_skype_urpmi script (at start)
 
 # Done
 #             github upload
@@ -441,6 +443,17 @@ fi
 
 # Sanity checking ends here for the most part :-)  ----------------------------------------
 
+tstamp "Check if skypeforlinux is already installed"
+SKYPE_INSTALLED="unknown"
+rpm -q ${SKYPE_PACKAGE} 2>&1 >/dev/null
+if [ $? = 0 ]; then
+	tstamp "${SKYPE_PACKAGE} (version: $(rpm -q ${SKYPE_PACKAGE})) is already installed"
+	SKYPE_INSTALLED="true"
+else
+	tstamp "${SKYPE_PACKAGE} is not installed"
+	SKYPE_INSTALLED="false"
+fi
+
 local_download_dir=${LSSUD}
 
 if [ -d ${local_download_dir} ]; then
@@ -450,17 +463,10 @@ else
         doit "mkdir -p ${local_download_dir}"
 fi
 
-
 # Check if we already have a local copy of the skypeforlinux-64.rpm in Downloads
 if [ -s ${f} ]; then
 
         # We do have a previously downloaded copy of skypeforlinux-64.rpm
-
-        # Display currently installed rpm version
-        tstamp "Checking installed version of skypeforlinux"
-        tstamp "rpm -q skypeforlinux"
-        current_version=$(rpm -q skypeforlinux)
-        tstamp "Current version is: ${current_version}"
 
         tstamp "${f} was previously downloaded. Checking if newer version available."
         # check if we have a previous directory listing from server
@@ -475,21 +481,35 @@ if [ -s ${f} ]; then
                 # check if same directory listing as last download's directory listing
                 cmp ${SKYPE_RPM_DIR_LISTING} ${SKYPE_RPM_DIR_LISTING}- 2>&1 > /dev/null
                 if [ $? = 0 ]; then
-                        tstamp "skypeforlinux-64.rpm directory listing has *not* changed."
-			tstamp "+---------------------------------------------+"
-			tstamp "| current version: $(rpm -q ${SKYPE_PACKAGE}) |"
-			tstamp "+---------------------------------------------+"
-                        tstamp "+--------------------------+"
-                        tstamp "| Nothing needs to be done |"
-                        tstamp "+--------------------------+"
+                        tstamp "skypeforlinux-64.rpm directory listing has not changed."
+			if [ ${SKYPE_INSTALLED} = "true" ]; then
+				tstamp "+---------------------------------------------+"
+				tstamp "| current version: $(rpm -q ${SKYPE_PACKAGE}) |"
+				tstamp "+---------------------------------------------+"
+				tstamp "+--------------------------+"
+				tstamp "| Nothing needs to be done |"
+				tstamp "+--------------------------+"
+			else
+				tstamp "We have a downloaded skypeforlinux rpm but it is not installed. Installing."
+				#TODO just install from previously downloaded copy
+				install_skypeforlinux
+
+				tstamp "+---------------------------------------------+"
+				tstamp "| current version: $(rpm -q ${SKYPE_PACKAGE}) |"
+				tstamp "+---------------------------------------------+"
+			fi
                 else
                         tstamp "skypeforlinux-64.rpm directory listing has changed. Installing new skype version."
-                        # rename the current downloaded skypeforlinux-64.rpm to skypeforlinux-64.rpm-
-			doit "mv -f ${f} ${f}-"
+
+			current_version=$(rpm -q skypeforlinux)
+                        tstamp "rename the current downloaded skypeforlinux-64.rpm to skypeforlinux-64.rpm-${current_version}"
+			doit "mv -f ${f} ${f}-${current_version}"
 
                         tstamp "+----------------------------------+"
                         tstamp "| Installing updated skypeforlinux |"
                         tstamp "+----------------------------------+"
+
+			doit "/bin/sudo urpme skypeforlinux  # uninstall old version ${current_version}"
 
 			download_install
 
