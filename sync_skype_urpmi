@@ -10,11 +10,11 @@
 # Reference   https://wiki.mageia.org/en/Synchronize_local_skype_urpmi
 #             https://github.com/wikigazer/sync_skype_urpmi.git
 
-              version=4
+              version=5
 
 # Author      paul[dot]blackburn[at]gmail[dot]com
 # Written     2022_02_05
-# Updated     Fri 22 Sep 17:41:07 BST 2023
+# Updated     Fri 22 Sep 18:36:51 BST 2023
 
 # 2023_09_22  Updated for Mageia 9
 # 2022_03_04  bugfix update process
@@ -385,6 +385,7 @@ f=${LSSUD}/${SKYPE_RPM}
 SKYPE_RPM_DIR_LISTING=${f}_directory_listing
 
 cmd=$(basename ${0})
+cmd_path=${0}
 
 case "${1}" in
         -? | -help | -usage | --?| --help | --usage )
@@ -444,6 +445,34 @@ if [ $(whoami) = "root" ]; then
         exit 1
 fi
 
+
+tstamp "Check if newer version of this script, ${cmd} version ${version}, is available."
+
+# Download latest version from github and compare with running script
+# If match then we are already running latest script version.
+# Otherwise, display warning, show differences, and give details for downloading latest version.
+# Remove downloaded copy of script to avoid having multiple local copies each time script is run.
+
+tstamp "Downloading latest version of ${cmd}"
+latest_script_version="~/Downloads/${cmd}_$(date +%Y_%m_%d_at_%R)"
+doit "wget -O- https://raw.githubusercontent.com/wikigazer/sync_skype_urpmi/main/sync_skype_urpmi > ${latest_script_version}"
+
+tstamp "Compare local running copy of ${cmd} with freshly downloaded copy"
+doit "cmp ${cmd_path} ${latest_script_version}"
+if [ ${retcode} = 0 ]; then
+	tstamp "Good news: no difference between current and latest version."
+	doit "rm -rf ${latest_script_version}   # delete identical downloaded copy"
+else
+#	latest_version=$(grep version= ${latest_script_version} | grep -v _version)
+	tstamp "+----------------------------------------------------------------------------------------------+"
+	tstamp "| Warning: Current running script ${cmd} version ${version} does not match latest version. |"
+	tstamp "+----------------------------------------------------------------------------------------------+"
+	tstamp "Recommend downloading latest from: https://github.com/wikigazer/sync_skype_urpmi.git"
+	tstamp "+-----------------------------------------------------------------------------------------------------------------------------+"
+	doit "diff ${cmd_path} ${latest_script_version}  # display differences"
+	doit "rm -rf ${latest_script_version}    #remove downloaded copy"
+	tstamp "+-----------------------------------------------------------------------------------------------------------------------------+"
+fi
 
 # Sanity checking ends here for the most part :-)  ----------------------------------------
 
